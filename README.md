@@ -1,73 +1,75 @@
-# React + TypeScript + Vite
+# Greetings & Wishes App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A personalized greeting card web app built with React + Firebase.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Google OAuth and Email/Password authentication
+- Profile setup with name and photo upload
+- Browse greeting templates by category (Birthday, Anniversary, Festival, Love)
+- Live preview: your name and photo overlaid on every template
+- Share or download the merged card image
+- Premium template upsell popup
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React 18 + Vite + TypeScript
+- Tailwind CSS
+- Firebase (Auth, Firestore, Storage)
+- html2canvas
+- react-router-dom v6
+- react-hot-toast
 
-## Expanding the ESLint configuration
+## Setup
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1. Clone the repo:
+   ```bash
+   git clone <your-repo-url>
+   cd greetings-app
+   ```
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+3. Create a Firebase project at https://console.firebase.google.com
+   - Enable Authentication: Google + Email/Password
+   - Enable Firestore Database
+   - Enable Storage
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+4. Copy `.env.local.example` to `.env.local` and fill in your Firebase config:
+   ```
+   VITE_FIREBASE_API_KEY=...
+   VITE_FIREBASE_AUTH_DOMAIN=...
+   VITE_FIREBASE_PROJECT_ID=...
+   VITE_FIREBASE_STORAGE_BUCKET=...
+   VITE_FIREBASE_MESSAGING_SENDER_ID=...
+   VITE_FIREBASE_APP_ID=...
+   ```
+
+5. Add template images to `public/templates/` (JPG or PNG only).
+
+6. Start dev server:
+   ```bash
+   npm run dev
+   ```
+
+7. Build for production:
+   ```bash
+   npm run build
+   ```
+
+## Project Structure
+
 ```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+src/
+├── components/   # Reusable UI components
+├── context/      # AuthContext (Firebase user + profile)
+├── data/         # Static template data
+├── hooks/        # useAuth, useProfile
+├── pages/        # Login, Setup, Home, Preview
+├── routes/       # ProtectedRoute
+├── services/     # Firebase init, auth functions
+└── utils/        # exportCard, shareCard
 ```
