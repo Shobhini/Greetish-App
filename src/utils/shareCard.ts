@@ -25,8 +25,10 @@ export async function shareCard(canvas: HTMLCanvasElement): Promise<void> {
         const a = document.createElement('a')
         a.href = url
         a.download = 'greeting.png'
+        document.body.appendChild(a)
         a.click()
-        URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
         resolve()
       }
     }, 'image/png')

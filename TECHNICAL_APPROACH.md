@@ -1,48 +1,100 @@
 # Technical Approach Document
+## Custom Greetings & Wishes App
 
-## Problem-Solving Approach: Image Overlay Logic
+---
 
-The core challenge is layering the user's name and circular profile photo over a background template image, then merging all layers into a single shareable image.
+## 1. Problem-Solving Approach: Image Overlay Logic
 
-**Live Preview:** Implemented using CSS absolute positioning. The template image is the base layer; the user's name sits in a semi-transparent dark bar at the top (`position: absolute, top: 0`); the circular avatar is positioned top-left with Tailwind's `rounded-full` and a colored border. This approach is instant, responsive, and requires zero canvas manipulation for the preview.
+The main challenge was showing the user's name and profile photo on top of a greeting card template — and then merging all of that into one downloadable image.
 
-**Export:** When the user taps Share, `html2canvas` captures the DOM node (the `CardOverlay` div) and renders it to an off-screen `<canvas>`. Settings used: `scale: 2` for high-DPI output, `useCORS: true` for local image access, `backgroundColor: null` for transparency safety. All template images are stored locally in `/public/templates/` — this is critical for `html2canvas` to work without canvas taint errors.
+I broke this into two separate problems: **live preview** and **export**.
 
-**Share:** The canvas is converted to a PNG blob. If the browser supports the Web Share API with file sharing (`navigator.canShare({ files })`), the native share sheet is triggered (works on Android Chrome and iOS Safari). On desktop browsers that don't support file sharing, a direct download is triggered as a fallback.
+### Live Preview (CSS Layering)
 
-## Tech Stack
+For the preview on screen, I used CSS `position: absolute` inside a relatively-positioned container. The template image is the base. On top of it, I placed:
+- A dark gradient at the top and bottom (so text is always readable regardless of the image background)
+- The user's circular avatar (top-left) using `border-radius: 50%`
+- The user's name next to the avatar with a `text-shadow` for contrast
+- The quote text at the bottom center
 
-| Layer | Technology | Why |
+This approach is simple and instant — no canvas needed for just showing the preview. React re-renders the overlay whenever the user edits their name or swaps their photo, so the live update feels real-time.
+
+### Export (Canvas API)
+
+This is where things got tricky. My first approach was to use a library called `html2canvas` that captures a DOM element and converts it to a canvas. It worked locally but broke when I mixed base64 images (the user's profile photo stored in Firestore) with regular URL images (the templates). The canvas would get "tainted" and the download would fail silently.
+
+So I dropped `html2canvas` and rewrote the export logic using the **native browser Canvas 2D API** directly. The steps are:
+
+1. Create an 800×800 `<canvas>` element in memory
+2. Fetch and draw the template background image
+3. Draw dark gradient overlays (top and bottom) using `createLinearGradient`
+4. Clip a circular region using `ctx.arc` + `ctx.clip()`, then draw the avatar inside it
+5. Draw the white border ring around the avatar
+6. Draw the user's name with `fillText` and a shadow
+7. Word-wrap and draw the quote at the bottom
+
+This approach has no dependency on the DOM structure, no CORS issues, and produces a clean 800×800 PNG every time.
+
+---
+
+## 2. Tech Stack
+
+| Layer | Tool | Reason |
 |---|---|---|
-| Frontend | React 18 + Vite + TypeScript | Fast dev, type safety |
-| Styling | Tailwind CSS | Rapid UI, responsive by default |
-| Auth | Firebase Authentication | Free, supports Google + Email |
-| Database | Firestore | Real-time, serverless |
-| File storage | Firebase Storage | Profile photo hosting |
-| Image overlay | CSS absolute positioning | Zero-cost, instant preview |
-| Image export | html2canvas | DOM-to-canvas, no server needed |
-| Share | Web Share API + download fallback | Works on mobile and desktop |
-| Routing | react-router-dom v6 | Industry standard |
-| Toasts | react-hot-toast | Lightweight feedback |
+| UI Framework | React 19 + TypeScript | Component-based, catches bugs at compile time |
+| Build Tool | Vite | Faster than CRA, simpler config |
+| Styling | Tailwind CSS | Speeds up layout work significantly |
+| Authentication | Firebase Auth | Handles Google login and session management out of the box |
+| Database | Firestore | Stores user profile (name, photo, isPremium flag) |
+| Image Export | Browser Canvas 2D API | No library needed, full control, no CORS problems |
+| Sharing | Web Share API + download fallback | Native share sheet on mobile, download on desktop |
+| Routing | React Router v6 | Protected routes, navigation |
+| Notifications | react-hot-toast | Lightweight, easy to use |
 
-## Challenges & Solutions
+**Note on Firebase Storage:** Initially the plan was to use Firebase Storage for profile photos. It kept throwing errors (storage bucket CORS issues, rules not configured correctly). I changed the approach — profile photos are now converted to base64 using `FileReader` and stored directly in the Firestore user document. This removed the Storage dependency entirely and made the setup simpler.
 
-**1. html2canvas and image CORS**
-External images cause canvas taint, making export fail silently. Solution: all template images are bundled locally in `/public/templates/` and served from the same origin. The `crossOrigin="anonymous"` attribute is set on all `<img>` tags in the overlay.
+---
 
-**2. Web Share API inconsistency**
-`navigator.share` exists on most mobile browsers, but file sharing (`canShare({ files })`) is not universally supported. Solution: always check `navigator.canShare({ files })` before attempting file share; fall back to programmatic download.
+## 3. Challenges & How I Solved Them
 
-**3. Firebase auth initialization flicker**
-On page load, Firebase takes ~200ms to resolve the auth state. Without handling this, the app briefly shows the login page before redirecting authenticated users. Solution: `AuthContext` tracks a `loading` boolean; a full-screen spinner is shown until `onAuthStateChanged` fires.
+**Canvas taint with mixed image sources**
 
-**4. Profile setup redirect loop**
-After Google sign-in, the user has a Firebase account but no Firestore profile document yet. The `AuthContext` checks for the profile document; if absent, the user is sent to `/setup`. After setup saves the document and calls `refreshProfile()`, the context updates and the user proceeds to `/home`.
+The biggest issue. When I tried using `html2canvas`, it failed because the user's profile photo is a base64 data URI while templates are regular URLs. Browsers block canvas reads on mixed sources to prevent fingerprinting. My fix was to stop using `html2canvas` and draw everything manually on a canvas — I load each image with `new Image()` and draw it directly using `ctx.drawImage()`. Since I control exactly what goes in, there's no taint issue.
 
-## Future Improvements
+**Text not readable on some templates**
 
-- **Payment integration:** The `isPremium` flag in Firestore is already in place. Adding Razorpay or Stripe would only require a checkout flow that updates this field.
-- **More template categories:** Templates are static data — adding new ones requires only dropping images into `/public/templates/` and adding entries to `src/data/templates.ts`.
-- **Template upload by admin:** A simple Firestore-backed admin flow could replace the static data file, enabling dynamic template management without redeployment.
-- **Offline support:** Service worker caching of template images would allow card creation without connectivity.
-- **Custom text editing:** Future versions could let users edit the quote text or add stickers, using a canvas-based editor like Fabric.js.
+Light-colored templates made white text invisible. I solved this by adding gradient overlays — a dark-to-transparent gradient at the top (where the name sits) and a transparent-to-dark gradient at the bottom (where the quote sits). This ensures text always has contrast regardless of the template image.
+
+**Auth state flicker on page load**
+
+Firebase `onAuthStateChanged` is async, so there's a short moment where the app doesn't know if the user is logged in or not. Without handling this, the app flashes the login page before redirecting. I added a `loading` state in `AuthContext` — the app shows a loading screen until Firebase resolves the auth state.
+
+**Profile not set up yet after first login**
+
+After a user signs in with Google or Email for the first time, Firebase creates their account but there's no Firestore document for them yet. I check for this in `AuthContext` — if `getDoc` returns nothing, the user is redirected to `/setup` to enter their name and photo. Once setup completes, `refreshProfile()` updates the context and redirects to `/home`.
+
+**Firebase Storage errors**
+
+As mentioned above, Firebase Storage kept throwing errors during photo upload. Rather than spending time debugging storage rules and CORS headers, I switched to storing photos as base64 in Firestore. It's a pragmatic decision — for a demo app it works fine. The tradeoff is slightly larger Firestore documents, but Firestore's 1MB limit per document is not a concern at this scale.
+
+---
+
+## 4. Future Improvements
+
+I have taken reference from the documentation as in there some api's i have not used ever. So few things which can be implemented in future are listed below. Feel free to let us know more about Greetish.
+
+**Dynamic Templates**
+
+For now templates are hardcoded. A better approach would be storing template metadata in Firestore and images in Firebase Storage, so new templates can be added without redeploying the app. An admin  can manage this.
+
+**Performance on Large Template Libraries**
+
+With many templates, loading them all at once would slow the grid down. Virtual scrolling (only rendering visible items) and lazy image loading would fix this.
+
+**Offline Support**
+
+A service worker could cache template images so users can create cards without internet. The profile data is already local once fetched.
+
+**Richer Personalization**
+
+Currently users can edit their name and swap their photo. Future versions could let users change the quote text, pick a font, add stickers, or reposition the avatar — similar to how Instagram Stories works.
